@@ -21,10 +21,11 @@ dir_temp =        '/dev/shm/' #ramdisk
 
 # I use this script on fanless home server, this pause for prevent overheating.
 # set to 0 for max performance
-sleep_seconds = 45
+sleep_seconds = 20
 
 artwork_temp_path = '%sartwork.jpg' % dir_temp
 lossless_extentions = re.compile('\.(flac?|FLAC)$')
+lossy_extentions = re.compile('\.(mp3?|MP3)$')
 files_total = 0
 files_converted = 0
 
@@ -114,36 +115,41 @@ def count_flacs():
         for fn in files:
             if(re.search(lossless_extentions,fn)):
                 files_total += 1
+    for root, dirs, files in os.walk(dir_destination):            
+        for fn in files:
+            if(re.search(lossy_extentions,fn)):
+                files_total -= 1
 
 def walk_source():
     global files_total, files_converted
     for root, dirs, files in os.walk(dir_source):
             
         for fn in files:
-            if(re.search(lossless_extentions,fn)):
-                path = os.path.join(root,fn)                
-                path = path_relative(path)                
-                splitted = path.split('/')    
+            if not fn.startswith('.'):
+                if(re.search(lossless_extentions,fn)):
+                    path = os.path.join(root,fn)                
+                    path = path_relative(path)                
+                    splitted = path.split('/')    
                 
-                # create level 1 directories
-                make_directory('%s%s' % (dir_destination, splitted[0]))
+                    # create level 1 directories
+                    make_directory('%s%s' % (dir_destination, splitted[0]))
                 
-                # create level 2 directories                
-                if os.path.isdir('%s%s/%s' % (dir_source, splitted[0], splitted[1])):
-                    make_directory('%s%s/%s' % (dir_destination, splitted[0], splitted[1]))
-                    artwork_path = '%s%s/folder.jpg' % (dir_source, splitted[0])
-                    source_file = '%s%s' % (dir_source, path)
-                    destination_file = '%s%s/%s/%s.mp3' % (dir_destination, splitted[0], splitted[1], fn[:-5])
-                else:
-                    artwork_path = '%s%s/folder.jpg' % (dir_source, splitted[0])
-                    source_file = '%s%s' % (dir_source, path)
-                    destination_file = '%s%s/%s.mp3' % (dir_destination, splitted[0], fn[:-5])
+                    # create level 2 directories                
+                    if os.path.isdir('%s%s/%s' % (dir_source, splitted[0], splitted[1])):
+                        make_directory('%s%s/%s' % (dir_destination, splitted[0], splitted[1]))
+                        artwork_path = '%s%s/folder.jpg' % (dir_source, splitted[0])
+                        source_file = '%s%s' % (dir_source, path)
+                        destination_file = '%s%s/%s/%s.mp3' % (dir_destination, splitted[0], splitted[1], fn[:-5])
+                    else:
+                        artwork_path = '%s%s/folder.jpg' % (dir_source, splitted[0])
+                        source_file = '%s%s' % (dir_source, path)
+                        destination_file = '%s%s/%s.mp3' % (dir_destination, splitted[0], fn[:-5])
                 
-                if not os.path.exists(destination_file):
-                    convert(source_file, destination_file, artwork_path)
-                    files_converted += 1
-                    print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
-                    time.sleep(sleep_seconds)
+                    if not os.path.exists(destination_file):
+                        convert(source_file, destination_file, artwork_path)
+                        files_converted += 1
+                        print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
+                        time.sleep(sleep_seconds)
  
     print 'TOTAL FLAC FOUND: %d' % files_total
     print 'TOTAL FLAC CONVERTED: %d' % files_converted
