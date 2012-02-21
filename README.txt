@@ -2,16 +2,17 @@
 Batch convert FLAC to MP3
 =========================
 
-I've use this script to convert all my lossess music collection
+I use this script to convert my lossess music collection
 to mp3 format for some devices, which doesn't have FLAC support
 or enough storage space.
 
 I organize my music to directories with "Artist - Album [year]" format
-which songs named as "track_number - Artist - Title.flac".
+which contain songs named as "01 - Artist - Title.flac".
 Each directory have an 500x500px JPEG artwork named "folder.jpg".
-Very often also included CUE and LOG files and additional artwork/scans
+Very often also included CUE and LOG files and additional artwork
 This script ignores all but FLACS, resizes "folder.jpg" to 300x300px
-and embed it to the MP3s as album artwork
+and embeds it to the MP3s as album artwork.
+Script doesn't make any changes in input directory.
 
 
 for example, i have:
@@ -34,7 +35,7 @@ VA - Back and 4th [2011] / CD1 / 1 - Sepalcure - Taking You Back.flac
                                  log.log
                            folder.jpg
 
-after convert it will be:
+and after convert:
 Autechre - Amber [1994] /  01 - Autechre - Foil.mp3
                            02 - Autechre - Montreal.mp3
                            03 - Autechre - Silverside.mp3
