@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import time
+import shutil
 from subprocess import Popen, PIPE
 try:
     from PIL import Image
@@ -28,6 +29,7 @@ lossless_extentions = re.compile('\.(flac?|FLAC)$')
 lossy_extentions = re.compile('\.(mp3?|MP3)$')
 files_total = 0
 files_converted = 0
+folders_removed = 0
 
 def make_directory(path):
     if not os.path.exists(path):
@@ -150,11 +152,33 @@ def walk_source():
                         files_converted += 1
                         print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
                         time.sleep(sleep_seconds)
- 
-    print 'TOTAL FLAC FOUND: %d' % files_total
-    print 'TOTAL FLAC CONVERTED: %d' % files_converted
+
+def walk_destination():
+    global folders_removed
+    for root, dirs, files in os.walk(dir_destination):
+            
+        for fn in files:
+            if not fn.startswith('.'):
+                if(re.search(lossy_extentions,fn)):
+                    path = os.path.join(root,fn)                
+                    path = path_relative(path)                
+                    splitted = path.split('/') 
+                    
+                    spath = '%s%s%s' % (dir_source, splitted[0], splitted[1])
+                    dpath = '%s%s%s' % (dir_destination, splitted[0], splitted[1])
+                    
+                    if not os.path.exists(spath) and os.path.exists(dpath):
+                        if os.path.isdir(dpath):
+                            if not dry_run:
+                                print 'REMOVING > %s' % dpath
+                                time.sleep(3) # For prevent mass-erase =)
+                                shutil.rmtree(dpath)
+                            folders_removed += 1
+                        
+    print 'TOTAL FOLDERS REMOVED: %d' % folders_removed
 
 if __name__ == '__main__':
     subprocess.call(['clear'], shell=True)
     count_flacs()
     walk_source()
+    walk_destination()
