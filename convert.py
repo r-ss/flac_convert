@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import time
+import datetime
 import shutil
 import sys
 from subprocess import Popen, PIPE
@@ -33,6 +34,9 @@ files_total = 0
 files_converted = 0
 folders_removed = 0
 
+time_start = 0
+time_end = 0
+
 def make_directory(path):
     if not os.path.exists(path):
         os.mkdir(path)
@@ -61,27 +65,36 @@ def process_path(string):
 
 def convert(source_path, destination_path, artwork_path):
     global files_total, files_converted
+    subprocess.call(['clear'], shell=True)
+    time_now = time.time()
+    print 'TIME RUNNING (H:M:S): %s' % str(datetime.timedelta(seconds = time_now - time_start))
+    try:
+        print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
+        average = (time_now - time_start) / files_converted
+        print 'AVERAGE TRACK CONVERTING TIME (SECONDS): %s' % str(average)
+        remaining = files_total - files_converted
+        print 'TRACKS REMAINING: %d' % remaining
+        print 'TIME ESTIMATED (H:M:S): %s' % str(datetime.timedelta(seconds = remaining * average))
+    except ZeroDivisionError:
+        print 'Zero Division Error xD'
+
+
     if not dry_run:
-        subprocess.call(['clear'], shell=True)
-        print 'CONVERTING'
-        flac_artist = get_flac_tag('ARTIST',      source_path)
-        flac_album  = get_flac_tag('ALBUM',       source_path)
-        flac_title  = get_flac_tag('TITLE',       source_path)
+        flac_artist = get_flac_tag('ARTIST', source_path)
+        flac_album  = get_flac_tag('ALBUM', source_path)
+        flac_title  = get_flac_tag('TITLE', source_path)
         flac_track  = get_flac_tag('TRACKNUMBER', source_path)
         flac_tracktotal = get_flac_tag('TRACKTOTAL', source_path)
         flac_disc = get_flac_tag('DISCNUMBER', source_path)
         flac_disctotal = get_flac_tag('DISCTOTAL', source_path)
-        flac_genre = get_flac_tag('GENRE',       source_path)
-        flac_date = get_flac_tag('DATE',        source_path)
-        flac_compilation = get_flac_tag('COMPILATION',        source_path)
-        print 'flac artist=%s  album=%s title=%s track=%s genre=%s date=%s' % (
-                flac_artist, flac_album, flac_title,
-                flac_track, flac_genre, flac_date)
+        flac_genre = get_flac_tag('GENRE', source_path)
+        flac_date = get_flac_tag('DATE', source_path)
+        flac_compilation = get_flac_tag('COMPILATION', source_path)
+        print 'Artist: %s  |  Album: %s  |  Title: %s' % (flac_artist, flac_album, flac_title)
         title = flac_title or source_path.replace('.flac', '')
         mp3_artist = flac_artist or artist
         mp3_album  = flac_album  or album
         mp3_title  = flac_title  or title
-        print 'mp3 artist=%s album=%s title=%s' % (mp3_artist, mp3_album, mp3_title)
         if check_file_exists('%strack.wav' % dir_temp):
             delete_file('%strack.wav' % dir_temp)
 
@@ -117,10 +130,6 @@ def convert(source_path, destination_path, artwork_path):
         subprocess.call(['eyeD3 --to-v2.4 -a "%s" -A "%s" -t "%s" %s' % (mp3_artist, mp3_album, mp3_title, re.escape(destination_path))], shell=True)
 
     files_converted += 1
-    try:
-        print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
-    except ZeroDivisionError:
-        print 'Zero Division Error xD'
     time.sleep(sleep_seconds)
         
 def get_flac_tag(tag, flac_path):
@@ -204,10 +213,18 @@ if __name__ == '__main__':
     subprocess.call(['clear'], shell=True)
 
     count_flacs()
+
+    time_start = time.time()
+
     walk_source()
     walk_destination()
+
+    time_end = time.time()
 
     if check_file_exists(artwork_temp_path):
         os.remove(artwork_temp_path)
     if check_file_exists('%strack.wav' % dir_temp):
         delete_file('%strack.wav' % dir_temp)
+
+    print 'TOTAL TIME (H:M:S): %s' % str(datetime.timedelta(seconds = time_end - time_start))
+    print 'GOOD BYE'
