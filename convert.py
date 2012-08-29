@@ -5,24 +5,26 @@ import re
 import subprocess
 import time
 import shutil
+import sys
 from subprocess import Popen, PIPE
 try:
     from PIL import Image
 except ImportError:
     import Image
 
-
 dry_run = False
 #dry_run = True
 
 # Set directories
-dir_source =      '/home/ress/h1/music/lossless/'
-dir_destination = '/home/ress/h1/music/lossy_duplicates/'
+#dir_source =      '/home/ress/h1/music/lossless/'
+#dir_destination = '/home/ress/h1/music/lossy_duplicates/'
+dir_source =      '/home/ress/flac_convert_tests/in/'
+dir_destination = '/home/ress/flac_convert_tests/out/'
 dir_temp =        '/dev/shm/' #ramdisk
 
 # I use this script on fanless home server, this pause for prevent overheating.
 # set to 0 for max performance
-sleep_seconds = 20
+sleep_seconds = 3
 
 artwork_temp_path = '%sartwork.jpg' % dir_temp
 lossless_extentions = re.compile('\.(flac?|FLAC)$')
@@ -47,15 +49,18 @@ def check_file_exists(path):
         return True
     else:
         return False
-
-def escape_path(string):
-    string = re.escape(string)
-    return string
-    
+  
 def to_unicode(string):
     return unicode(string, errors='ignore')
 
+def process_path(string):
+    encoding = sys.getfilesystemencoding()
+    string = string.decode(encoding)
+    string = re.escape(string)
+    return string
+
 def convert(source_path, destination_path, artwork_path):
+    global files_total, files_converted
     if not dry_run:
         subprocess.call(['clear'], shell=True)
         print 'CONVERTING'
@@ -63,53 +68,70 @@ def convert(source_path, destination_path, artwork_path):
         flac_album  = get_flac_tag('ALBUM',       source_path)
         flac_title  = get_flac_tag('TITLE',       source_path)
         flac_track  = get_flac_tag('TRACKNUMBER', source_path)
-        flac_genre  = get_flac_tag('GENRE',       source_path)
-        flac_date   = get_flac_tag('DATE',        source_path)
-        print "flac artist=%s  album=%s title=%s track=%s genre=%s date=%s" % (
+        flac_tracktotal = get_flac_tag('TRACKTOTAL', source_path)
+        flac_disc = get_flac_tag('DISCNUMBER', source_path)
+        flac_disctotal = get_flac_tag('DISCTOTAL', source_path)
+        flac_genre = get_flac_tag('GENRE',       source_path)
+        flac_date = get_flac_tag('DATE',        source_path)
+        flac_compilation = get_flac_tag('COMPILATION',        source_path)
+        print 'flac artist=%s  album=%s title=%s track=%s genre=%s date=%s' % (
                 flac_artist, flac_album, flac_title,
                 flac_track, flac_genre, flac_date)
         title = flac_title or source_path.replace('.flac', '')
         mp3_artist = flac_artist or artist
         mp3_album  = flac_album  or album
         mp3_title  = flac_title  or title
-        print "mp3  artist=%s  album=%s title=%s" % (
-                mp3_artist, mp3_album, mp3_title)
+        print 'mp3 artist=%s album=%s title=%s' % (mp3_artist, mp3_album, mp3_title)
+        if check_file_exists('%strack.wav' % dir_temp):
+            delete_file('%strack.wav' % dir_temp)
+
         subprocess.call(['flac -d -o "%strack.wav" "%s"' % (dir_temp, source_path)], shell=True)
-        print escape_path(destination_path)
+        print destination_path
     
-        if check_file_exists(artwork_path):
-            image = Image.open(artwork_path)
-            image.thumbnail((300,300), Image.ANTIALIAS)
-            image.save(artwork_temp_path, image.format, quality=75)
-            del image
-            
-            
-            subprocess.call(['lame -V2 --ti %s %strack.wav %s' % (escape_path(artwork_temp_path), dir_temp, escape_path(destination_path))], shell=True)
-        else:
-            subprocess.call(['lame -V2 %strack.wav %s' % (dir_temp, escape_path(destination_path))], shell=True)
-            
-        id3out = Popen(["id3v2",
-                            "--artist", to_unicode(mp3_artist),
-                            "--album",  to_unicode(mp3_album),
-                            "--song",   to_unicode(mp3_title),
-                            "--track",  flac_track,
-                            "--genre",  flac_genre,
-                            "--year",   flac_date,
-                            destination_path], stdout=PIPE).communicate()[0]
         if check_file_exists(artwork_temp_path):
             os.remove(artwork_temp_path)
-        delete_file('%strack.wav' % dir_temp)
+        if check_file_exists(artwork_path):
+            image = Image.open(artwork_path)
+            image.thumbnail((500,500), Image.ANTIALIAS)
+
+            # max 128Kb for artwork allowed, so...
+            image.save(artwork_temp_path, image.format, quality=90)
+            if os.path.getsize(artwork_temp_path) > 131070:
+                delete_file(artwork_temp_path)
+                image.save(artwork_temp_path, image.format, quality=70)
+                if os.path.getsize(artwork_temp_path) > 131070:
+                    delete_file(artwork_temp_path)
+                    image.save(artwork_temp_path, image.format, quality=50)
+                    if os.path.getsize(artwork_temp_path) > 131070:
+                        delete_file(artwork_temp_path)
+                        image.save(artwork_temp_path, image.format, quality=30)
+                        if os.path.getsize(artwork_temp_path) > 131070:
+                            delete_file(artwork_temp_path)
+                            image.thumbnail((300,300), Image.ANTIALIAS)
+                            image.save(artwork_temp_path, image.format, quality=30)
+            del image
+            subprocess.call([u'lame -V2 --id3v2-only --tg "%s" --tn %s/%s --ty %s --tv TCMP=%s --tv TPOS=%s/%s --ti %s %strack.wav %s' % (flac_genre, flac_track, flac_tracktotal, flac_date, flac_compilation, flac_disc, flac_disctotal, artwork_temp_path, dir_temp, process_path(destination_path))], shell=True)
+        else:
+            subprocess.call([u'lame -V2 --id3v2-only --tg "%s" --tn %s/%s --ty %s --tv TCMP=%s --tv TPOS=%s/%s %strack.wav %s' % (flac_genre, flac_track, flac_tracktotal, flac_date, flac_compilation, flac_disc, flac_disctotal, dir_temp, process_path(destination_path))], shell=True)
+
+        subprocess.call(['eyeD3 --to-v2.4 -a "%s" -A "%s" -t "%s" %s' % (mp3_artist, mp3_album, mp3_title, re.escape(destination_path))], shell=True)
+
+    files_converted += 1
+    try:
+        print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
+    except ZeroDivisionError:
+        print 'Zero Division Error xD'
+    time.sleep(sleep_seconds)
         
 def get_flac_tag(tag, flac_path):
-    TAGS = ('ARTIST', 'TITLE', 'ALBUM', 'GENRE', 'TRACKNUMBER', 'DATE')
+    TAGS = ('ARTIST', 'TITLE', 'ALBUM', 'GENRE', 'TRACKNUMBER', 'TRACKTOTAL', 'DISCNUMBER', 'DISCTOTAL', 'DATE', 'COMPILATION')
     if not tag in TAGS:
         raise RuntimeError("Tag=%s not valid, use: %s" % (tag, TAGS))
     metaflac = Popen(["metaflac", "--show-tag=%s" % tag, flac_path],
                  stdout=PIPE).communicate()[0]
     if metaflac:
         metaflac = metaflac.split('=')[1].strip()
-    return metaflac        
-
+    return metaflac
 
 def count_flacs():
     global files_total
@@ -123,9 +145,7 @@ def count_flacs():
                 files_total -= 1
 
 def walk_source():
-    global files_total, files_converted
-    for root, dirs, files in os.walk(dir_source):
-            
+    for root, dirs, files in os.walk(dir_source):            
         for fn in files:
             if not fn.startswith('.'):
                 if(re.search(lossless_extentions,fn)):
@@ -136,7 +156,7 @@ def walk_source():
                     # create level 1 directories
                     make_directory('%s%s' % (dir_destination, splitted[0]))
                 
-                    # create level 2 directories                
+                    # create level 2 directories
                     if os.path.isdir('%s%s/%s' % (dir_source, splitted[0], splitted[1])):
                         make_directory('%s%s/%s' % (dir_destination, splitted[0], splitted[1]))
                         artwork_path = '%s%s/folder.jpg' % (dir_source, splitted[0])
@@ -149,9 +169,12 @@ def walk_source():
                 
                     if not os.path.exists(destination_file):
                         convert(source_file, destination_file, artwork_path)
-                        files_converted += 1
-                        print 'CONVERTED %d OF %d, %F %%' % (files_converted, files_total, round(1.0 * files_converted / files_total * 100, 3))
-                        time.sleep(sleep_seconds)
+                    else:
+                        lossless_modified = os.path.getmtime(source_file)
+                        lossy_modified = os.path.getmtime(destination_file)
+                        if lossless_modified > lossy_modified:
+                            os.remove(destination_file)
+                            convert(source_file, destination_file, artwork_path)
 
 def walk_destination():
     global folders_removed
@@ -174,11 +197,17 @@ def walk_destination():
                                 time.sleep(3) # For prevent mass-erase =)
                                 shutil.rmtree(dpath)
                             folders_removed += 1
-                        
-    print 'TOTAL FOLDERS REMOVED: %d' % folders_removed
+    if folders_removed > 0:
+        print 'TOTAL FOLDERS REMOVED: %d' % folders_removed
 
 if __name__ == '__main__':
     subprocess.call(['clear'], shell=True)
+
     count_flacs()
     walk_source()
     walk_destination()
+
+    if check_file_exists(artwork_temp_path):
+        os.remove(artwork_temp_path)
+    if check_file_exists('%strack.wav' % dir_temp):
+        delete_file('%strack.wav' % dir_temp)
