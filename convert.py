@@ -28,7 +28,7 @@ disable_removing = False # Don't Remove Anything in Destination
 
 sms_enabled = True
 sms_script_path = '/home/ress/dev/sms/smsru.py'
-phone = '+79091362188' # for sms
+phone = '+79605074433' # for sms
 
 production = True
 if production:
